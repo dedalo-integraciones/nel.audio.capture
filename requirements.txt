@@ -1,0 +1,17 @@
+# Nel Audio Capture - Python Requirements
+# Install with:  pip install -r requirements.txt
+
+# Audio capture & processing
+pyaudio>=0.2.14          # WASAPI loopback + microphone recording (Windows)
+numpy>=1.24.0            # Signal mixing, level metering
+pydub>=0.25.1            # MP3 export
+
+# GUI - built-in Python (no install needed)
+# tkinter - included with Python on Windows
+
+# Optional: for building standalone .exe
+# pyinstaller>=6.0
+
+# NOTE: MP3 export also requires ffmpeg.exe in your system PATH.
+# Download from https://ffmpeg.org/download.html or:
+#   winget install Gyan.FFmpeg
