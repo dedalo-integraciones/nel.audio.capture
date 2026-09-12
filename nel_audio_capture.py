@@ -95,15 +95,15 @@ C = {
     "bg":       "#0D0F14",
     "surface":  "#141720",
     "panel":    "#1A1D28",
-    "border":   "#252A3A",
+    "border":   "#2A3444",
     "accent":   "#00D4FF",
     "accent2":  "#7C3AED",
-    "red":      "#FF3B5C",
-    "green":    "#00E676",
-    "yellow":   "#FFD600",
-    "orange":   "#FF8C00",
-    "text":     "#E8EAF0",
-    "muted":    "#6B7280",
+    "red":      "#FF4452",
+    "green":    "#06D6A0",
+    "yellow":   "#FBBF24",
+    "orange":   "#F97316",
+    "text":     "#F8FAFC",
+    "muted":    "#8892B0",
     "white":    "#FFFFFF",
 }
 
@@ -735,14 +735,19 @@ class VUMeter(tk.Canvas):
         self.delete("all")
         w = self.winfo_width() or 300
         h = self.winfo_height() or 22
-        p = 2
+        p = 4
         self.create_rectangle(p, p, w-p, h-p, fill=C["border"], outline="")
         bw = int((w - 2*p) * self._level)
         if bw > 0:
             for i in range(bw):
                 frac = i / (w - 2*p)
-                c = C["green"] if frac < 0.6 else (C["yellow"] if frac < 0.85 else C["red"])
-                self.create_rectangle(p+i, p, p+i+1, h-p, fill=c, outline="")
+                if frac < 0.4:
+                    r, g, b = 0, int(210 - 210 * frac * 2.5), 208
+                elif frac < 0.8:
+                    r, g, b = int(255 * (frac - 0.4) * 2.5), int(208 - 208 * ((frac - 0.4) * 2.5)), 0
+                else:
+                    r, g, b = 255, 68, 82
+                self.create_rectangle(p+i, p, p+i+1, h-p, fill=f"#{r:02X}{g:02X}{b:02X}", outline="")
         if self._peak > 0:
             px = p + int((w-2*p) * self._peak)
             self.create_rectangle(px-2, p, px+2, h-p, fill=C["white"], outline="")
@@ -792,8 +797,16 @@ class Waveform(tk.Canvas):
         step = w / max(len(pts), 1)
         for i, v in enumerate(pts):
             x = int(i * step)
-            amp = int(v * (mid - 4))
-            self.create_line(x, mid-amp, x, mid+amp, fill=C["accent"], width=1)
+            amp = int(v * (mid - 6))
+            abs_v = abs(v)
+            if abs_v > 0.7:
+                c = C["red"]
+            elif abs_v > 0.4:
+                c = C["yellow"]
+            else:
+                c = C["green"]
+            width = 1 if abs_v < 0.15 else 2
+            self.create_line(x, mid-amp, x, mid+amp, fill=c, width=width)
         self.create_line(0, mid, w, mid, fill=C["border"], dash=(4,4))
 
 
@@ -976,7 +989,7 @@ class FFmpegWarningDialog(tk.Toplevel):
 
         self._set_buttons(
             "✖  No, usar WAV",   C["border"], C["muted"],
-            "✔  Sí, instalar",   C["green"],  C["bg"],
+            "✔  Sí, instalar",   "#06D6A0",  C["bg"],
         )
         self._set_progress("Paso 1 de 4")
 
@@ -1074,7 +1087,7 @@ class FFmpegWarningDialog(tk.Toplevel):
 
         self._set_buttons(
             "← Volver",          C["border"], C["muted"],
-            "Sí, terminó →",     C["green"],  C["bg"],
+            "Sí, terminó →",     "#06D6A0",  C["bg"],
         )
         self._set_progress("Paso 3 de 4")
 
@@ -1122,7 +1135,7 @@ class FFmpegWarningDialog(tk.Toplevel):
 
         self._set_buttons(
             "",              C["bg"],      C["bg"],
-            "🎉  ¡Listo!",   C["green"],  C["bg"],
+            "🎉  ¡Listo!",   "#06D6A0",  C["bg"],
         )
         self._btn_left.config(state="disabled")
         self._set_progress("✅ Instalación completada")
@@ -1192,8 +1205,22 @@ class FFmpegWarningDialog(tk.Toplevel):
 
 # ── App Principal ─────────────────────────────────────────────────────────────
 class NelAudioCaptureApp(tk.Tk):
+    def _resource_path(self, relative_path):
+        if getattr(sys, "frozen", False):
+            base_path = sys._MEIPASS
+        else:
+            base_path = os.path.dirname(os.path.abspath(__file__))
+        return os.path.join(base_path, relative_path)
+
     def __init__(self):
         super().__init__()
+        if sys.platform == "win32":
+            icon_path = self._resource_path(os.path.join("assets", "icon.ico"))
+            if os.path.isfile(icon_path):
+                try:
+                    self.iconbitmap(icon_path)
+                except tk.TclError:
+                    pass
         self.title(f"{APP_NAME} — {APP_VERSION}")
         self.geometry("1200x850")
         self.minsize(900, 700)
@@ -1284,28 +1311,34 @@ class NelAudioCaptureApp(tk.Tk):
 
     def _format_device_label(self, idx, name):
         label = name.strip()
-        if len(label) > 40:
-            label = label[:37] + "..."
+        if len(label) > 35:
+            label = label[:32] + "..."
         return f"{label} [{idx}]"
 
     # ── UI ────────────────────────────────────────────────────────────────────
     def _build_ui(self):
         # Header
-        hdr = tk.Frame(self, bg=C["surface"], height=72)
+        hdr = tk.Frame(self, bg=C["surface"])
         hdr.pack(fill="x")
         hdr.pack_propagate(False)
-        tk.Label(hdr, text="⬤", fg=C["red"], bg=C["surface"],
-                 font=("Segoe UI", 22)).pack(side="left", padx=(20,8), pady=16)
+        hdr.configure(height=72)
+        
+        # Accent accent line at top
+        accent_line = tk.Frame(hdr, bg=C["accent"], height=2)
+        accent_line.pack(fill="x", side="top")
+        
+        tk.Label(hdr, text="⬤", fg="#FF4452", bg=C["surface"],
+                 font=("Segoe UI", 18)).pack(side="left", padx=(20,6), pady=(16,0))
         ttl = tk.Frame(hdr, bg=C["surface"])
         ttl.pack(side="left")
-        tk.Label(ttl, text=APP_NAME, fg=C["white"], bg=C["surface"],
-                 font=("Segoe UI", 17, "bold")).pack(anchor="w")
+        tk.Label(ttl, text=APP_NAME, fg=C["text"], bg=C["surface"],
+                 font=("Segoe UI", 16, "bold")).pack(anchor="w")
         tk.Label(ttl, text=APP_VERSION, fg=C["muted"], bg=C["surface"],
-                 font=("Segoe UI", 9)).pack(anchor="w")
+                 font=("Segoe UI", 8)).pack(anchor="w")
         tk.Label(hdr, textvariable=self._timer_var, fg=C["accent"],
-                 bg=C["surface"], font=("Consolas", 28, "bold")).pack(side="right", padx=24)
+                 bg=C["surface"], font=("Consolas", 28, "bold")).pack(side="right", padx=24, pady=(12,0))
 
-        # Banner ffmpeg (visible solo si no está instalado)
+# Banner ffmpeg (visible solo si no está instalado)
         if not FFMPEG_OK:
             banner = tk.Frame(self, bg=C["orange"])
             banner.pack(fill="x")
@@ -1314,17 +1347,20 @@ class NelAudioCaptureApp(tk.Tk):
             tk.Label(banner_inner,
                      text="⚠  ffmpeg no encontrado — MP3 deshabilitado. WAV disponible.",
                      fg=C["bg"], bg=C["orange"],
-                     font=("Segoe UI", 8, "bold")).pack(side="left")
-            tk.Button(banner_inner, text="¿Cómo instalar ffmpeg?",
+                     font=("Segoe UI", 9, "bold")).pack(side="left")
+            tk.Button(banner_inner, text="📦 ¿Cómo instalar ffmpeg?",
                       command=lambda: FFmpegWarningDialog(self),
                       bg="#CC6600", fg=C["white"],
-                      font=("Segoe UI", 8, "bold"),
-                      relief="flat", cursor="hand2", padx=8, pady=2).pack(side="right")
+                      font=("Segoe UI", 9, "bold"),
+                      relief="flat", cursor="hand2", padx=12, pady=3).pack(side="right")
 
         # Status bar
-        tk.Label(self, textvariable=self._status_var, fg=C["muted"],
+        status_bar = tk.Frame(self, bg=C["surface"], height=28)
+        status_bar.pack(fill="x", side="bottom")
+        status_bar.pack_propagate(False)
+        tk.Label(status_bar, textvariable=self._status_var, fg=C["muted"],
                  bg=C["surface"], font=("Consolas", 9), anchor="w",
-                 padx=12).pack(fill="x")
+                 padx=16, pady=4).pack(fill="x", side="left")
 
         # Body
         body = tk.Frame(self, bg=C["bg"])
@@ -1413,12 +1449,12 @@ class NelAudioCaptureApp(tk.Tk):
         # Controls (right)
         ctrl = self._card(right, "Recording")
         self._btn_start = tk.Button(ctrl, text="⏺  START", command=self._start_recording,
-            bg=C["red"], fg=C["white"], activebackground="#CC2040", activeforeground=C["white"],
-            font=("Segoe UI", 13, "bold"), relief="flat", cursor="hand2", pady=12)
+            bg="#FF4452", fg="#FFFFFF", activebackground="#CC2040", activeforeground="#FFFFFF",
+            font=("Segoe UI", 13, "bold"), relief="flat", cursor="hand2", padx=24, pady=12, bd=0)
         self._btn_start.pack(fill="x", padx=8, pady=(4,6))
         self._btn_stop = tk.Button(ctrl, text="⏹  STOP", command=self._stop_recording,
             bg=C["border"], fg=C["muted"], activebackground=C["border"], activeforeground=C["text"],
-            font=("Segoe UI", 13, "bold"), relief="flat", cursor="hand2", pady=12, state="disabled")
+            font=("Segoe UI", 13, "bold"), relief="flat", cursor="hand2", padx=24, pady=12, bd=0, state="disabled")
         self._btn_stop.pack(fill="x", padx=8, pady=(0,8))
         self._rec_dot = tk.Label(ctrl, text="●  NOT RECORDING", fg=C["muted"],
             bg=C["panel"], font=("Consolas", 9))
@@ -1466,7 +1502,7 @@ class NelAudioCaptureApp(tk.Tk):
 
         self._btn_save = tk.Button(sv, text="💾  SAVE RECORDING", command=self._save,
             bg=C["accent"], fg=C["bg"], activebackground="#00AACC", activeforeground=C["bg"],
-            font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", pady=8, state="disabled")
+            font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", padx=20, pady=8, bd=0, state="disabled")
         self._btn_save.pack(fill="x", padx=8, pady=(10,8))
 
         # Info — dispositivos detectados
@@ -1501,11 +1537,11 @@ class NelAudioCaptureApp(tk.Tk):
 
         # Botón info ffmpeg
         if not FFMPEG_OK:
-            tk.Button(inf, text="ℹ  Instalar ffmpeg (MP3)",
+            tk.Button(inf, text="📦  Instalar ffmpeg (MP3)",
                       command=lambda: FFmpegWarningDialog(self),
                       bg=C["orange"], fg=C["bg"],
                       font=("Segoe UI", 8, "bold"),
-                      relief="flat", cursor="hand2", pady=4).pack(fill="x", padx=8, pady=(0,8))
+                      relief="flat", cursor="hand2", padx=12, pady=4).pack(fill="x", padx=8, pady=(0,8))
 
         # Botón de diagnóstico
         tk.Button(inf, text="🔍  Ver diagnóstico de audio",
@@ -1659,10 +1695,10 @@ class NelAudioCaptureApp(tk.Tk):
         outer = tk.Frame(parent, bg=C["bg"])
         outer.pack(fill="x", pady=(0,10))
         tk.Label(outer, text=title.upper(), fg=C["accent"],
-                 bg=C["bg"], font=("Segoe UI", 7, "bold")).pack(anchor="w", pady=(0,3))
+                 bg=C["bg"], font=("Segoe UI", 7, "bold"), padx=8, pady=9).pack(anchor="w")
         inner = tk.Frame(outer, bg=C["panel"],
                          highlightbackground=C["border"], highlightthickness=1)
-        inner.pack(fill="x")
+        inner.pack(fill="x", padx=8, pady=(0,4))
         return inner
 
     def _level_poll(self):
@@ -1749,9 +1785,10 @@ class NelAudioCaptureApp(tk.Tk):
     def _blink(self):
         if not self._recording: return
         self._blink_state = not self._blink_state
+        color = "#FF4452" if self._blink_state else "#8892B0"
         self._rec_dot.config(
-            text="🔴  GRABANDO" if self._blink_state else "⬤  GRABANDO",
-            fg=C["red"] if self._blink_state else "#7A0000")
+            text="🔴  GRABANDO" if self._blink_state else "●  GRABANDO",
+            fg=color)
         self._blink_after = self.after(600, self._blink)
 
     def _browse(self):
